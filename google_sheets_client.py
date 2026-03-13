@@ -48,17 +48,37 @@ class GoogleSheetsClient:
         else:
             print(f"Error downloading PDF: {response.status_code} - {response.text}")
 
+
     def convert_pdf_to_image(self, pdf_path, output_image_path):
-        """Converts the first page of the downloaded PDF to an image."""
+        """Converts the first page of the PDF to an image, cropped to visible content."""
         try:
             doc = fitz.open(pdf_path)
             if len(doc) > 0:
-                page = doc.load_page(0)  # Convert the first page
+                page = doc.load_page(0)
+                # Alternative for get_tightbbox(): 
+                # We use get_bboxlog() which returns a list of (type, bbox) 
+                # or simply use the page's drawing/text content boundaries.
+                # Get the bounding box of all text and drawings
+                content_rect = page.get_bboxlog()
+                if content_rect:
+                    # Merge all individual bboxes into one single surrounding rectangle
+                    # content_rect items look like: ('fill-path', (x0, y0, x1, y1))
+                    full_bbox = fitz.Rect()
+                    for item in content_rect:
+                        full_bbox.include_rect(item[1])
+                    # Add a small margin (padding)
+                    padding = 0.1
+                    full_bbox = full_bbox + (-padding, -padding, padding, padding)
+                    # Apply the crop
+                    page.set_cropbox(full_bbox)
+                # Generate and save the image
                 pix = page.get_pixmap(dpi=150)
                 pix.save(output_image_path)
-                print(f"Success: PDF converted to image at {output_image_path}")
+                print(f"Success: Cropped PDF saved at {output_image_path}")
             else:
-                print("Error: The PDF is empty.")
+                print("Error: Empty PDF")
+                
+            doc.close()
         except Exception as e:
             print(f"Error converting PDF to image: {e}")
 

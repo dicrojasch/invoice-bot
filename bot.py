@@ -112,26 +112,26 @@ def main():
     # )
     
     # print("3. Exporting 'View Gas' to PDF...")
-    # pdf_path = "view_gas.pdf"
+    pdf_path = "view_gas.pdf"
     # sheets_client.export_sheet_to_pdf(
     #     spreadsheet_id=TARGET_SPREADSHEET_ID,
     #     sheet_name=TARGET_SHEET_NAME,
     #     output_pdf_path=pdf_path
     # )
     
-    # print("4. Converting 'View Gas' PDF to Image...")
-    # image_path = "view_gas.png"
-    # sheets_client.convert_pdf_to_image(
-    #     pdf_path=pdf_path,
-    #     output_image_path=image_path
-    # )
-    option_to_update = "Apartamento 301"
-    options = sheets_client.get_dropdown_options(TARGET_SPREADSHEET_ID, TARGET_SHEET_NAME, 'G2')
-    if option_to_update not in options:
-        print(f"Error: '{option_to_update}' is not a valid option. Allowed values for G2 are: {options}")
-        return
-    print(f"'{option_to_update}' in options: {option_to_update in options}")
-    sheets_client.update_dropdown_cell(TARGET_SPREADSHEET_ID, TARGET_SHEET_NAME, 'G2', option_to_update)
+    print("4. Converting 'View Gas' PDF to Image...")
+    image_path = "view_gas.png"
+    sheets_client.convert_pdf_to_image(
+        pdf_path=pdf_path,
+        output_image_path=image_path
+    )
+    # option_to_update = "Apartamento 301"
+    # options = sheets_client.get_dropdown_options(TARGET_SPREADSHEET_ID, TARGET_SHEET_NAME, 'G2')
+    # if option_to_update not in options:
+    #     print(f"Error: '{option_to_update}' is not a valid option. Allowed values for G2 are: {options}")
+    #     return
+    # print(f"'{option_to_update}' in options: {option_to_update in options}")
+    # sheets_client.update_dropdown_cell(TARGET_SPREADSHEET_ID, TARGET_SHEET_NAME, 'G2', option_to_update)
 
 if __name__ == '__main__':
     main()
