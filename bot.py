@@ -5,8 +5,8 @@ import sys
 import stat
 
 # Import our new modules
-import google_drive_client
-import gemini_client
+from google_drive_client import GoogleDriveClient
+from gemini_client import GeminiClient
 import google_sheets_client
 
 # --- Configuration Section ---
@@ -52,25 +52,30 @@ SCOPES = [
 def main():
     print("1. Authenticating Google Services...")
     # Authenticate Drive and Sheets using the new modules
-    drive_service = google_drive_client.authenticate_drive(SERVICE_ACCOUNT_FILE, SCOPES)
+    drive_client = GoogleDriveClient(SERVICE_ACCOUNT_FILE, SCOPES)
     gc = google_sheets_client.authenticate_sheets(SERVICE_ACCOUNT_FILE, SCOPES)
     
 
+    all_files = drive_client.list_files_by_relative_path("1ZysWGtJTAcYhqu8Af92mP37VccBuF6P8", "2026/03/mediciones_energia")
+    for file in all_files:
+        print(file)
+    image = drive_client.download_image_from_drive(all_files[0]['id'])
 
-    
     # print("2. Downloading image from Google Drive...")
-    # image = google_drive_client.download_image_from_drive(drive_service, DRIVE_FILE_ID)
+    # image = drive_client.download_image_from_drive(DRIVE_FILE_ID)
     
-    # print("3. Extracting data using Google Gemini...")
-    # gemini_client.configure_gemini(GEMINI_API_KEY)
-    # # extracted_data = gemini_client.extract_data_with_gemini(image)
+    print("3. Extracting energy data using Google Gemini...")
+    gemini = GeminiClient(GEMINI_API_KEY)
+    
+    # Example using the new function with the first image found
+    extracted_data = gemini.extract_data_energy_measurement_203(image, all_files[0]['name'])
     
     # # Placeholder for testing as in the original code
     # extracted_data = json.loads('{"fechas": "23 Ene. 2026", "concepto":"CONSUMO GAS : 73990.89   FIJO", "costo": "78180.44", "fecha_pago_oportuno": "12 Mar. 2026"}')
     
-    # if extracted_data:
-    #     print("--- Extracted Data ---")
-    #     print(json.dumps(extracted_data, indent=2))
+    if extracted_data:
+        print("--- Extracted Data ---")
+        print(json.dumps(extracted_data, indent=2))
         
     #     print("4. Uploading extracted data to Google Sheets...")
     #     google_sheets_client.upload_to_sheets(gc, SPREADSHEET_ID, SHEET_NAME, extracted_data)
