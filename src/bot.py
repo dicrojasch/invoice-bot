@@ -50,6 +50,7 @@ SCOPES = [
 ]
 
 def main():
+    os.makedirs("output", exist_ok=True)
     print("1. Authenticating Google Services...")
     # Authenticate Drive and Sheets using the new modules
     # drive_client = GoogleDriveClient(SERVICE_ACCOUNT_FILE, SCOPES)
@@ -108,11 +109,11 @@ def main():
     #     sheet_name=TARGET_SHEET_NAME,
     #     column1_index=6,
     #     column2_index=14,
-    #     output_txt_path='columnas_F_N.txt'
+    #     output_txt_path='output/columnas_F_N.txt'
     # )
     
     # print("3. Exporting 'View Gas' to PDF...")
-    pdf_path = "view_gas.pdf"
+    pdf_path = "output/view_gas.pdf"
     # sheets_client.export_sheet_to_pdf(
     #     spreadsheet_id=TARGET_SPREADSHEET_ID,
     #     sheet_name=TARGET_SHEET_NAME,
@@ -120,7 +121,7 @@ def main():
     # )
     
     print("4. Converting 'View Gas' PDF to Image...")
-    image_path = "view_gas.png"
+    image_path = "output/view_gas.png"
     sheets_client.convert_pdf_to_image(
         pdf_path=pdf_path,
         output_image_path=image_path

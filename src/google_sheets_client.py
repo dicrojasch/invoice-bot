@@ -213,3 +213,11 @@ class GoogleSheetsClient:
         except (KeyError, IndexError):
             print(f"Note: Cell {cell_label} data not found in response.")
             return []
+
+    def get_all_sheet_names(self, spreadsheet_id):
+        """
+        Returns a list of titles for all worksheets in the spreadsheet.
+        """
+        sh = self.gc.open_by_key(spreadsheet_id)
+        worksheets = sh.worksheets()
+        return [ws.title for ws in worksheets]
