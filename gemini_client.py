@@ -1,14 +1,15 @@
 import json
-import google.generativeai as genai
+from google import genai
 
 class GeminiClient:
     def __init__(self, api_key):
         """Configures and initializes the Gemini API client."""
-        genai.configure(api_key=api_key)
+        self.client = genai.Client(api_key=api_key)
 
-    def extract_data_gas_bill_with_gemini(self, image, model_name='models/gemini-2.5-flash'):
+    def extract_data_gas_bill_with_gemini(self, image, model_name='gemini-2.5-flash'):
         """Sends the image to Gemini and asks for specific data formatted as JSON."""
-        model = genai.GenerativeModel(model_name)
+        if model_name.startswith('models/'):
+            model_name = model_name.replace('models/', '')
         
         # Strict prompt to ensure we get a clean JSON response that Python can parse easily
         prompt = """
@@ -25,13 +26,17 @@ class GeminiClient:
         Costo Total used to be with no decimals
         """
         
-        response = model.generate_content([prompt, image])
+        response = self.client.models.generate_content(
+            model=model_name,
+            contents=[prompt, image]
+        )
         
         return self._parse_json_response(response)
 
-    def extract_data_energy_measurement_203(self, image, file_name, model_name='models/gemini-2.5-flash'):
+    def extract_data_energy_measurement_203(self, image, file_name, file_date=None, model_name='gemini-2.5-flash'):
         """Extracts energy measurement from a photo and returns a JSON."""
-        model = genai.GenerativeModel(model_name)
+        if model_name.startswith('models/'):
+            model_name = model_name.replace('models/', '')
         
         prompt = f"""
             Analyze this energy meter reading photo.
@@ -45,7 +50,7 @@ class GeminiClient:
             Response Requirements:
             Respond ONLY with a valid JSON object. Do not include markdown formatting, code blocks, or backticks.
             Exact JSON Keys:
-            "fecha": (string in YYYY-MM-DD format or null if not visible)
+            "fecha": (string in YYYY-MM-DD format based primarily on the provided metadata date: '{file_date}', or null if unavailable)
             "nombre_archivo": (string exactly '{file_name}')
             "medicion_kwh": (number, use a dot as decimal separator)
         """
@@ -63,7 +68,10 @@ class GeminiClient:
         # "medicion_kwh": (number, just the digits and decimals if any)
         # """
         
-        response = model.generate_content([prompt, image])
+        response = self.client.models.generate_content(
+            model=model_name,
+            contents=[prompt, image]
+        )
         
         return self._parse_json_response(response)
 

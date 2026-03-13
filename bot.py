@@ -57,9 +57,18 @@ def main():
     
 
     all_files = drive_client.list_files_by_relative_path("1ZysWGtJTAcYhqu8Af92mP37VccBuF6P8", "2026/03/mediciones_energia")
-    for file in all_files:
-        print(file)
-    image = drive_client.download_image_from_drive(all_files[0]['id'])
+    
+    # Find the file that contains "203" in its name
+    target_file = next((f for f in all_files if "203" in f['name']), None)
+    
+    if not target_file:
+        print("Error: No file found containing '203' in its name.")
+        if not all_files:
+            return
+        target_file = all_files[0]
+        print(f"Using fallback: {target_file['name']}")
+
+    image = drive_client.download_image_from_drive(target_file['id'])
 
     # print("2. Downloading image from Google Drive...")
     # image = drive_client.download_image_from_drive(DRIVE_FILE_ID)
@@ -67,8 +76,12 @@ def main():
     print("3. Extracting energy data using Google Gemini...")
     gemini = GeminiClient(GEMINI_API_KEY)
     
-    # Example using the new function with the first image found
-    extracted_data = gemini.extract_data_energy_measurement_203(image, all_files[0]['name'])
+    # Use the found target file
+    extracted_data = gemini.extract_data_energy_measurement_203(
+        image, 
+        target_file['name'],
+        file_date=target_file.get('originalTime')
+    )
     
     # # Placeholder for testing as in the original code
     # extracted_data = json.loads('{"fechas": "23 Ene. 2026", "concepto":"CONSUMO GAS : 73990.89   FIJO", "costo": "78180.44", "fecha_pago_oportuno": "12 Mar. 2026"}')
