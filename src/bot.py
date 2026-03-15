@@ -85,28 +85,24 @@ def main():
     TARGET_SPREADSHEET_ID = "1BW64-NPp563ga3JlT4_oLKY8FAJ685Mx-llMLQLv0Y4"
     TARGET_SHEET_NAME = "View Gas"
     
-    # print("2. Extracting columns F and N to text file...")
-    # # Column F is index 6, Column N is index 14
-    # sheets_client.extract_columns_to_text(
-    #     spreadsheet_id=TARGET_SPREADSHEET_ID,
-    #     sheet_name=TARGET_SHEET_NAME,
-    #     column1_index=6,
-    #     column2_index=14,
-    #     output_txt_path='output/columnas_F_N.txt'
-    # )
-    
-    # print("3. Exporting 'View Gas' to PDF...")
-    pdf_path = "output/view_gas.pdf"
-    # sheets_client.export_sheet_to_pdf(
-    #     spreadsheet_id=TARGET_SPREADSHEET_ID,
-    #     sheet_name=TARGET_SHEET_NAME,
-    #     output_pdf_path=pdf_path
-    # )
-    
+    print("2. Extracting columns F and N to text file...")
+    # Column F is index 6, Column N is index 14
+    text = sheets_client.get_formatted_text_from_columns(TARGET_SPREADSHEET_ID, TARGET_SHEET_NAME, 6, 14)
+    sheets_client.save_text_to_file(text, 'output/columnas_F_N.txt')
+
+    print("3. Exporting 'View Gas' to PDF...")
+    pdf_content = sheets_client.get_pdf_content(
+        spreadsheet_id=TARGET_SPREADSHEET_ID,
+        sheet_name=TARGET_SHEET_NAME
+    )
+    # pdf_path = "output/view_gas.pdf"
+    # if pdf_content:
+    #     sheets_client.save_pdf_to_file(pdf_content, pdf_path)
+        
     print("4. Converting 'View Gas' PDF to Image...")
     image_path = "output/view_gas.png"
     sheets_client.convert_pdf_to_image(
-        pdf_path=pdf_path,
+        pdf_content=pdf_content,
         output_image_path=image_path
     )
     # option_to_update = "Apartamento 301"
