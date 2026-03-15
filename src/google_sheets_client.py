@@ -2,6 +2,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import requests
 import fitz  # PyMuPDF
+import base64
 
 class GoogleSheetsClient:
     def __init__(self, service_account_file, scopes):
@@ -74,7 +75,7 @@ class GoogleSheetsClient:
                     full_bbox = fitz.Rect()
                     for item in content_rect:
                         full_bbox.include_rect(item[1])
-                    padding = 0.1
+                    padding = 0.5
                     full_bbox = full_bbox + (-padding, -padding, padding, padding)
                     page.set_cropbox(full_bbox)
                 pix = page.get_pixmap(dpi=300)
@@ -87,6 +88,14 @@ class GoogleSheetsClient:
         except Exception as e:
             print(f"Error converting PDF to image: {e}")
             return None
+
+    def pix_to_base64(self, pixmap):
+        """Converts a fitz.Pixmap to a base64 encoded string."""
+        if pixmap:
+            img_bytes = pixmap.tobytes("png")
+            base64_string = base64.b64encode(img_bytes).decode('utf-8')
+            return base64_string
+        return None
 
     def save_image_to_file(self, pixmap, output_image_path):
         """Saves a pixmap to a local image file."""

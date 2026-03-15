@@ -50,13 +50,13 @@ def main():
     # for view_sheet_name in view_sheet_names:
         # process_sheet_view(view_sheet_name)
 
-    # process_sheet_view(TARGET_SPREADSHEET_ID, "View Total", sheets_client, "2026", "Marzo", "C2", "E2")
+    process_sheet_view(TARGET_SPREADSHEET_ID, "View Total", sheets_client, "2026", "Marzo", "C2", "E2")
     # process_sheet_credito_facil_view(TARGET_SPREADSHEET_ID, sheets_client, "2026", "Marzo")
     # process_sheet_gas_view(TARGET_SPREADSHEET_ID, sheets_client, "2026", "Marzo")
     # process_sheet_codensa_kwh_view(TARGET_SPREADSHEET_ID, sheets_client, "2026", "Marzo")
     # process_sheet_mediciones_101_view(TARGET_SPREADSHEET_ID, sheets_client, "2026", "Marzo")
     # process_sheet_energia_local_101_view(TARGET_SPREADSHEET_ID, sheets_client, "2026", "Marzo")
-    process_sheet_energia_local_103_view(TARGET_SPREADSHEET_ID, sheets_client, "2026", "Marzo")
+    # process_sheet_energia_local_103_view(TARGET_SPREADSHEET_ID, sheets_client, "2026", "Marzo")
     
 
 def set_year_and_month(spreadsheet_id, sheets_client, view_sheet_name, year_to_set, month_to_set, cell_year, cell_month):
@@ -87,6 +87,8 @@ def export_and_convert_sheet(spreadsheet_id, sheets_client, view_sheet_name, fil
         column1_index=3,
         column2_index=5
     )
+    print(f"4.1. {prefix}Saving text content to file...")
+    sheets_client.save_text_to_file(text, file_path + '.txt')
 
     print(f"5. {prefix}Exporting '{view_sheet_name}' to PDF...")
     pdf_content = sheets_client.get_pdf_content(
