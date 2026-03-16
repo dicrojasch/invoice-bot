@@ -3,19 +3,46 @@ from google.oauth2.service_account import Credentials
 import requests
 import fitz  # PyMuPDF
 import base64
+import os
 
 class GoogleSheetsClient:
-    def __init__(self, service_account_file, scopes):
+    def __init__(self, service_account_file, scopes, spreadsheet_id=None):
         """Authenticates and initializes the Google Sheets client."""
         self.creds = Credentials.from_service_account_file(
             service_account_file, scopes=scopes)
         self.gc = gspread.authorize(self.creds)
+        self.spreadsheet_id = spreadsheet_id or os.getenv('TARGET_SPREADSHEET_ID')
+        self.sh = self.gc.open_by_key(self.spreadsheet_id)
+        self._worksheet_cache = {}
+        self._sheet_data_cache = {}
 
-    def upload_to_sheets(self, spreadsheet_id, sheet_name, data):
-        """Appends the extracted data as a new row in the specified Google Sheet."""
-        # Open the target spreadsheet and select the specific tab
+    def get_cached_worksheet(self, sheet_name, spreadsheet_id=None):
+        """Retrieves a worksheet, using an internal cache to minimize API calls."""
+        # Only use cache for the default spreadsheet
+        if not spreadsheet_id or spreadsheet_id == self.spreadsheet_id:
+            if sheet_name not in self._worksheet_cache:
+                self._worksheet_cache[sheet_name] = self.sh.worksheet(sheet_name)
+            return self._worksheet_cache[sheet_name]
+        
+        # If a different spreadsheet_id is provided, fetch it without caching
         sh = self.gc.open_by_key(spreadsheet_id)
-        worksheet = sh.worksheet(sheet_name)
+        return sh.worksheet(sheet_name)
+
+    def get_all_values_cached(self, sheet_name, spreadsheet_id=None):
+        """Fetches all values from the sheet and caches them. Re-fetches if not cached."""
+        if not spreadsheet_id or spreadsheet_id == self.spreadsheet_id:
+            if sheet_name not in self._sheet_data_cache:
+                worksheet = self.get_cached_worksheet(sheet_name, spreadsheet_id)
+                self._sheet_data_cache[sheet_name] = worksheet.get_all_values()
+            return self._sheet_data_cache[sheet_name]
+        
+        # For non-default spreadsheets, avoid caching to prevent memory leaks over time
+        worksheet = self.get_cached_worksheet(sheet_name, spreadsheet_id)
+        return worksheet.get_all_values()
+
+    def upload_to_sheets(self, sheet_name, data, spreadsheet_id=None):
+        """Appends the extracted data as a new row in the specified Google Sheet."""
+        worksheet = self.get_cached_worksheet(sheet_name, spreadsheet_id=spreadsheet_id)
         
         # Prepare the list of values matching your columns (assuming A, B, C, D)
         row = [
@@ -29,12 +56,70 @@ class GoogleSheetsClient:
         worksheet.append_row(row)
         print("Success: Data uploaded to Google Sheets!")
 
-    def get_pdf_content(self, spreadsheet_id, sheet_name):
-        """Retrieves PDF content for a specific tab from Google Sheets."""
-        sh = self.gc.open_by_key(spreadsheet_id)
-        worksheet = sh.worksheet(sheet_name)
+    # Helper function to convert "key1=val1;key2=val2" into a dictionary
+    def parse_parameter_string(self, param_string):
+        if not param_string or '=' not in str(param_string):
+            return {}
         
-        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=pdf&gid={worksheet.id}"
+        # Split by semicolon to get pairs, then by equals to get key/value
+        # We use strip() to handle potential whitespace
+        try:
+            return {
+                pair.split('=')[0].strip(): pair.split('=')[1].strip()
+                for pair in str(param_string).split(';')
+                if '=' in pair
+            }
+        except Exception:
+            return {}
+
+    # Helper function to convert "key1=val1,val2;key2=val3" into a dictionary with lists
+    def parse_parameter_list_string(self, param_string):
+        if not param_string or '=' not in str(param_string):
+            return {}
+        
+        try:
+            return {
+                pair.split('=')[0].strip(): [v.strip() for v in pair.split('=')[1].split(',')]
+                for pair in str(param_string).split(';')
+                if '=' in pair
+            }
+        except Exception:
+            return {}
+
+    def parse_nested_list(self, input_str):
+        if not input_str:
+            return []
+        
+        # 1. Split by semicolon to get the outer groups: ['F3,F4', 'O3,O4']
+        # 2. Split each group by comma: [['F3', 'F4'], ['O3', 'O4']]
+        return [item.split(',') for item in str(input_str).split(';')]
+
+    def get_all_records_for_bill(self, spreadsheet_id=None):
+        sheet_name = "bills"
+        worksheet = self.get_cached_worksheet(sheet_name, spreadsheet_id=spreadsheet_id)
+        data_records = worksheet.get_all_records()
+
+        # 2. Process the records to expand columns I and J
+        for row in data_records:
+            # Expand 'parameters' column (Column I)
+            row['parameters'] = self.parse_parameter_string(row.get('parameters', ''))
+            # Expand 'fixed_parameters' column (Column J)
+            row['fixed_parameters'] = self.parse_parameter_string(row.get('fixed_parameters', ''))
+            # Expand 'title' column into nested lists (Column K)
+            row['title'] = self.parse_nested_list(row.get('title', ''))
+            # Expand 'resume_text' column into nested lists (Column L)
+            row['resume_text'] = self.parse_nested_list(row.get('resume_text', ''))
+            # Expand 'restricted_parameter' column into nested lists (Column M)
+            row['restricted_parameter'] = self.parse_parameter_list_string(row.get('restricted_parameter', ''))
+
+        return data_records
+            
+    def get_pdf_content(self, sheet_name, spreadsheet_id=None):
+        """Retrieves PDF content for a specific tab from Google Sheets."""
+        actual_id = spreadsheet_id or self.spreadsheet_id
+        worksheet = self.get_cached_worksheet(sheet_name, spreadsheet_id=spreadsheet_id)
+        
+        url = f"https://docs.google.com/spreadsheets/d/{actual_id}/export?format=pdf&gid={worksheet.id}"
         
         import google.auth.transport.requests
         request = google.auth.transport.requests.Request()
@@ -57,9 +142,9 @@ class GoogleSheetsClient:
             return True
         return False
 
-    def export_sheet_to_pdf(self, spreadsheet_id, sheet_name, output_pdf_path):
+    def export_sheet_to_pdf(self, sheet_name, output_pdf_path, spreadsheet_id=None):
         """Exports a specific tab to a PDF file and downloads it locally."""
-        content = self.get_pdf_content(spreadsheet_id, sheet_name)
+        content = self.get_pdf_content(sheet_name, spreadsheet_id=spreadsheet_id)
         if content:
             return self.save_pdf_to_file(content, output_pdf_path)
         return False
@@ -109,16 +194,14 @@ class GoogleSheetsClient:
         """Converts PDF bytes to an image and saves it locally."""
         pix = self.get_image_from_pdf_content(pdf_content)
         if pix:
-            return self.save_image_to_file(pix, output_image_path)
-        return False
+            return pix
+        return None
 
-    def get_formatted_text_from_columns(self, spreadsheet_id, sheet_name, column1_index, column2_index):
+    def get_formatted_text_from_columns(self, sheet_name, column1_index, column2_index, spreadsheet_id=None):
         """
         Extracts content from two columns and returns it as a formatted string.
         """
-        sh = self.gc.open_by_key(spreadsheet_id)
-        worksheet = sh.worksheet(sheet_name)
-        all_values = worksheet.get_all_values()
+        all_values = self.get_all_values_cached(sheet_name, spreadsheet_id=spreadsheet_id)
         
         lines = []
         for i, row in enumerate(all_values):
@@ -140,31 +223,60 @@ class GoogleSheetsClient:
         with open(output_txt_path, 'w', encoding='utf-8') as f:
             f.write(text)
 
-    def extract_columns_to_text(self, spreadsheet_id, sheet_name, column1_index, column2_index, output_txt_path):
+    def extract_columns_to_text(self, sheet_name, column1_index, column2_index, output_txt_path, spreadsheet_id=None):
         """
         Extracts text from two columns (1-based index) and saves it to a local text file.
         column1_index and column2_index should be integers (e.g., 1 for A, 2 for B).
         """
-        text = self.get_formatted_text_from_columns(spreadsheet_id, sheet_name, column1_index, column2_index)
+        text = self.get_formatted_text_from_columns(sheet_name, column1_index, column2_index, spreadsheet_id=spreadsheet_id)
         self.save_text_to_file(text, output_txt_path)
         print(f"Success: Columns {column1_index} and {column2_index} extracted to {output_txt_path}")
 
-    def update_dropdown_cell(self, spreadsheet_id, sheet_name, cell_label, new_value):
+    def update_dropdown_cell(self, sheet_name, cell_label, new_value, spreadsheet_id=None):
         """
-        Updates a cell in the specified Google Sheet.
+        Updates a cell in the specified Google Sheet and invalidates the data cache.
         """
-        sh = self.gc.open_by_key(spreadsheet_id)
-        worksheet = sh.worksheet(sheet_name)
+        worksheet = self.get_cached_worksheet(sheet_name, spreadsheet_id=spreadsheet_id)
         
         worksheet.update_acell(cell_label, new_value)
-        print(f"Success: Updated cell {cell_label} to '{new_value}'")
+        # Clear the data cache because formulas in the sheet might recalculate based on this change
+        if (not spreadsheet_id or spreadsheet_id == self.spreadsheet_id) and sheet_name in self._sheet_data_cache:
+            del self._sheet_data_cache[sheet_name]
+            
+        print(f"Success: Updated cell {cell_label} to '{new_value}'. Formatted data cache invalidated.")
         return True
 
-    def get_dropdown_options(self, spreadsheet_id, sheet_name, cell_label):
+    def get_cell_value(self, sheet_name, cell_label, spreadsheet_id=None):
+        """
+        Retrieves the value of a specific cell from the locally cached data grid.
+        This prevents massive API read quotas from single-cell lookups.
+        """
+        all_values = self.get_all_values_cached(sheet_name, spreadsheet_id=spreadsheet_id)
+        
+        try:
+            row_idx, col_idx = gspread.utils.a1_to_rowcol(cell_label)
+            # a1_to_rowcol returns 1-based indexes, adjust to 0-based for python lists
+            r, c = row_idx - 1, col_idx - 1
+            
+            # Check boundaries just in case
+            if r < len(all_values) and c < len(all_values[r]):
+                value = all_values[r][c]
+            else:
+                value = ""
+                
+        except Exception as e:
+            print(f"Error parsing cell label {cell_label}: {e}")
+            value = ""
+            
+        print(f"Success: Retrieved value from cell {cell_label}: '{value}'")
+        return value
+
+    def get_dropdown_options(self, sheet_name, cell_label, spreadsheet_id=None):
         """
         Retrieves the allowed values for a dropdown cell.
         Returns a list of strings if ONE_OF_LIST, otherwise returns an empty list or None.
         """
+        spreadsheet_id = spreadsheet_id or self.spreadsheet_id
         url = f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}?ranges={sheet_name}!{cell_label}&includeGridData=true"
         
         import google.auth.transport.requests
@@ -218,10 +330,11 @@ class GoogleSheetsClient:
             print(f"Note: Cell {cell_label} data not found in response.")
             return []
 
-    def get_all_sheet_names(self, spreadsheet_id):
+    def get_all_sheet_names(self, spreadsheet_id=None):
         """
         Returns a list of titles for all worksheets in the spreadsheet.
         """
-        sh = self.gc.open_by_key(spreadsheet_id)
+        sh = self.sh if not spreadsheet_id or spreadsheet_id == self.spreadsheet_id else self.gc.open_by_key(spreadsheet_id)
         worksheets = sh.worksheets()
         return [ws.title for ws in worksheets]
+

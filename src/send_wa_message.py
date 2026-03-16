@@ -4,56 +4,62 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# WhatsApp API configuration
-WA_API_URL = os.getenv('WA_API_URL')
-API_WA_KEY = os.getenv('API_WA_KEY')
-WHATSAPP_GROUP_ID = os.getenv('WHATSAPP_GROUP_ID')
+class WhatsAppClient:
+    def __init__(self, api_url=None, api_key=None, group_id=None):
+        """
+        Initializes the WhatsAppClient with API configuration.
+        Defaults to environment variables if not provided.
+        """
+        self.api_url = api_url or os.getenv('WA_API_URL')
+        self.api_key = api_key or os.getenv('API_WA_KEY')
+        self.group_id = group_id or os.getenv('WHATSAPP_GROUP_ID')
 
-
-def send_secure_whatsapp(phone, message, image_path=None):
-    # Secure headers
-    headers = {
-        "x-api-key": API_WA_KEY
-    }
-    
-    payload = {
-        "phone": phone,
-        "message": message,
-        "imagePath": image_path
-    }
-    
-    try:
-        r = requests.post(WA_API_URL + "/send", json=payload, headers=headers)
-        return r.json()
-    except Exception as e:
-        return {"error": str(e)}
-
+    def send_message(self, phone, message, image_path=None):
+        """Sends a text message and optionally an image via file path."""
+        headers = {
+            "x-api-key": self.api_key
+        }
         
+        payload = {
+            "phone": phone,
+            "message": message,
+            "imagePath": image_path
+        }
+        
+        try:
+            r = requests.post(f"{self.api_url}/send", json=payload, headers=headers)
+            return r.json()
+        except Exception as e:
+            return {"error": str(e)}
 
-def send_secure_base64_whatsapp(phone, message, image_base64):
-    # Secure headers
-    headers = {
-        "x-api-key": API_WA_KEY
-    }
-    
-    if(image_base64 is None):
-        send_secure_whatsapp(phone, message)
+    def send_message_base64(self, phone, message, image_base64):
+        """Sends a text message and an image via base64 encoded string."""
+        if image_base64 is None:
+            return self.send_message(phone, message)
 
-    payload = {
-        "phone": phone,
-        "message": message,
-        "imageBase64": image_base64
-    }
-    
-    try:
-        r = requests.post(WA_API_URL + "/send-base64", json=payload, headers=headers)
-        return r.json()
-    except Exception as e:
-        return {"error": str(e)}
+        headers = {
+            "x-api-key": self.api_key
+        }
+        
+        payload = {
+            "phone": phone,
+            "message": message,
+            "imageBase64": image_base64
+        }
+        
+        try:
+            r = requests.post(f"{self.api_url}/send-base64", json=payload, headers=headers)
+            return r.json()
+        except Exception as e:
+            return {"error": str(e)}
 
 # Usage examples:
 if __name__ == "__main__":
-    # print(send_secure_whatsapp(WHATSAPP_GROUP_ID, "Test from Python", "/home/diego/repos/wa-server/view_total.png"))
+    client = WhatsAppClient()
+    
+    # Example: Send message from file (commented out)
+    # print(client.send_message(client.group_id, "Test from Python", "/path/to/image.png"))
+
     file_path = '/home/diego/repos/invoice-bot/src/test_img_base64'
 
     try:
@@ -62,8 +68,10 @@ if __name__ == "__main__":
             image_base64 = file.read().strip()
         
         print(f"Success! Base64 string loaded. Length: {len(image_base64)} characters.")
+        
+        print(client.send_message_base64(client.group_id, "Test from Python Class", image_base64))
+        
     except FileNotFoundError:
         print(f"Error: The file {file_path} was not found.")
-
-
-    print(send_secure_base64_whatsapp(WHATSAPP_GROUP_ID, "Test from Python", image_base64))
+    except Exception as e:
+        print(f"Error: {e}")
