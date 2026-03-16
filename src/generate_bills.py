@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import json
 import sys
+import time
 
 # Import our new modules
 from utils import check_env_permissions
@@ -161,12 +162,28 @@ def main(year_to_set, month_to_set, validate=True):
             # Using triple backticks here is optional but keeps font consistency
             text_to_send = f"```{title or resume_text or ''}```"
 
-        print(client.send_message_base64(destination_validation, text_to_send, base64_image)    )
+        print(client.send_message_base64(destination, text_to_send, base64_image))
+        time.sleep(5)
 
 
 if __name__ == '__main__':
+    import argparse
     
-    year_to_set = "2026"
-    month_to_set = "Marzo"
-    validate = True
-    main(year_to_set, month_to_set, validate)
+    # Setup command line arguments
+    parser = argparse.ArgumentParser(description="Generate and send invoices via WhatsApp.")
+    parser.add_argument('--year', type=str, default="2026", help="Year to set for the bills (default: 2026)")
+    parser.add_argument('--month', type=str, default="Marzo", help="Month to set for the bills (default: Marzo)")
+    parser.add_argument('--no-validate', action='store_false', dest='validate', help="Send bills directly to responsible phones instead of validation number")
+    parser.set_defaults(validate=True)
+    
+    args = parser.parse_args()
+
+    # Execution examples:
+    # Default execution: 
+    #   python src/generate_bills.py 
+    # Custom year and month: 
+    #   python src/generate_bills.py --year 2025 --month Diciembre
+    # Send directly to responsible (skip validation): 
+    #   python src/generate_bills.py --no-validate
+    
+    main(args.year, args.month, args.validate)

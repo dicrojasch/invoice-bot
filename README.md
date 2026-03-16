@@ -68,3 +68,25 @@ cd evolution-api
 cp .env.example .env
 npm install
 npm run build
+```
+
+---
+
+## Usage
+
+To generate and send invoices, run the `generate_bills.py` script. You can provide optional parameters for the year, month, and validation mode.
+
+### Basic Usage
+Defaults to year "2026", month "Marzo", and sends to the validation number.
+```bash
+python src/generate_bills.py
+```
+
+### Advanced Usage
+```bash
+# Set specific year and month
+python src/generate_bills.py --year 2025 --month Diciembre
+
+# Send directly to responsible phones (skip validation)
+python src/generate_bills.py --no-validate
+```
