@@ -96,9 +96,9 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
             continue
 
         if validate:
-            destination = bill['validation']
+            destination = str(bill['validation'])
         else:
-            destination = bill['phone_responsible']
+            destination = str(bill['phone_responsible'])
 
         bill_type = bill['bill']
         view_sheet_name = bill['sheet']
