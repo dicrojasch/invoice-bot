@@ -9,6 +9,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 class GoogleSheetsClient:
+    """
+    A client for interacting with Google Sheets, providing caching,
+    PDF export, and structured data extraction capabilities.
+    
+    Internal operations are logged at DEBUG level to maintain a clean 
+    main execution output.
+    """
     def __init__(self, service_account_file, scopes, spreadsheet_id=None):
         """Authenticates and initializes the Google Sheets client."""
         self.creds = Credentials.from_service_account_file(

@@ -57,6 +57,16 @@ SCOPES = [
 ]
 
 def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only=False):
+    """
+    Main execution loop for generating and sending invoices.
+    
+    Args:
+        year_to_set (str): The year to set in the spreadsheet dropdown.
+        month_to_set (str): The month to set in the spreadsheet dropdown.
+        validate (bool): If True, sends to validation phone; else to responsible phone.
+        execution_ids (list): Optional list of id_execution to filter bills.
+        list_only (bool): If True, prints available bills and exits.
+    """
     os.makedirs("output", exist_ok=True)
     logger.info("Authenticating Google Services...")
     # Authenticate Drive and Sheets using the new modules
@@ -67,6 +77,7 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
     bills = sheets_client.get_all_records_for_bill(SPREADSHEET_ID)
 
     if list_only:
+        # Display a summary of all bills retrieved from the 'bills' tab
         logger.info("--- Available Bills ---")
         header = f"{'ID':<5} | {'Sheet':<20} | {'Responsible':<15} | {'Parameters'}"
         logger.info(header)

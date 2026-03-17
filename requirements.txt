@@ -6,7 +6,5 @@ gspread
 google-genai
 Pillow
 python-dotenv
-fitz
-requests
 pymupdf
-frontend
+requests

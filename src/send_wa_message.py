@@ -19,7 +19,15 @@ class WhatsAppClient:
         self.group_id = group_id or os.getenv('WHATSAPP_GROUP_ID')
 
     def _handle_response(self, r):
-        """Internal helper to handle responses and catch JSON/HTTP errors."""
+        """
+        Internal helper to handle responses and catch JSON/HTTP errors.
+        
+        Args:
+            r (requests.Response): The response object from requests.
+            
+        Returns:
+            dict: Parsed JSON data or an error dictionary.
+        """
         try:
             # Raise an exception for 4xx/5xx status codes
             r.raise_for_status()

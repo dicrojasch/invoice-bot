@@ -74,7 +74,7 @@ npm run build
 
 ## Usage
 
-To generate and send invoices, run the `generate_bills.py` script. You can provide optional parameters for the year, month, and validation mode.
+To generate and send invoices, run the `generate_bills.py` script. You can provide optional parameters for the year, month, validation mode, and filtering.
 
 ### Basic Usage
 Defaults to year "2026", month "Marzo", and sends to the validation number.
@@ -89,4 +89,19 @@ python src/generate_bills.py --year 2025 --month Diciembre
 
 # Send directly to responsible phones (skip validation)
 python src/generate_bills.py --no-validate
+
+# Process specific bills by their execution ID
+python src/generate_bills.py --ids 1,19
+
+# Only list available bills from the spreadsheet without processing them
+python src/generate_bills.py --list
+
+# Control logging verbosity (DEBUG, INFO, WARNING, ERROR)
+python src/generate_bills.py --log DEBUG
 ```
+
+### Logging
+The project uses a structured logging system. Logs identify the module and, where applicable, the specific bill ID being processed:
+`[INFO][generate_bills] [id=19] Sending to Whatsapp...`
+
+By default, internal Google Sheets operations are logged at `DEBUG` level to keep the output clean. Use `--log DEBUG` to see all details.
