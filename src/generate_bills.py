@@ -33,9 +33,9 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly'
 ]
 
-def main(year_to_set, month_to_set, validate=True):
+def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only=False):
     os.makedirs("output", exist_ok=True)
-    print("1. Authenticating Google Services...")
+    print(" Authenticating Google Services...")
     # Authenticate Drive and Sheets using the new modules
     sheets_client = GoogleSheetsClient(SERVICE_ACCOUNT_FILE, SCOPES)
     client = WhatsAppClient()
@@ -43,7 +43,32 @@ def main(year_to_set, month_to_set, validate=True):
 
     bills = sheets_client.get_all_records_for_bill(SPREADSHEET_ID)
 
-    for bill in bills:          
+    if list_only:
+        print("\n--- Available Bills ---")
+        print(f"{'ID':<5} | {'Sheet':<20} | {'Responsible':<15} | {'Parameters'}")
+        print("-" * 80)
+        for bill in bills:
+            if execution_ids and str(bill.get('id_execution')) not in execution_ids:
+                continue
+            
+            id_exec = bill.get('id_execution', 'N/A')
+            sheet = bill.get('sheet', 'N/A')
+            resp = bill.get('phone_responsible', 'N/A')
+            params = json.dumps(bill.get('parameters', {}))
+            fixed = json.dumps(bill.get('fixed_parameters', {}))
+            
+            print(f"{id_exec:<5} | {sheet:<20} | {resp:<15} | {params} (Fixed: {fixed})")
+        print("-" * 80)
+        return
+
+    for bill in bills: 
+        
+        print(f"1. Starting for bill {bill['id_execution']}...")
+        
+        if execution_ids and str(bill.get('id_execution')) not in execution_ids:
+            print(f"1.1. Skipping bill {bill['id_execution']}...")
+            continue
+
         if validate:
             destination = bill['validation']
         else:
@@ -108,6 +133,7 @@ def main(year_to_set, month_to_set, validate=True):
         else:
             print("4. {prefix}No title for text message...")
 
+        title = title.strip().replace("\n", " ")
 
         resume_text = ""
         if bill['resume_text']:
@@ -118,22 +144,23 @@ def main(year_to_set, month_to_set, validate=True):
             for row in bill['resume_text']:
                 label = sheets_client.get_cell_value(view_sheet_name, row[0]).strip().replace("\n", " ")
                 value = sheets_client.get_cell_value(view_sheet_name, row[1]).strip().replace("\n", " ") if len(row) > 1 else ""
-                raw_data.append((label, value))
+                # Format: Label in bold, then value on the next line
+                # Using * for bold works in standard WhatsApp font
+                raw_data.append(f"\t*{label}:*\n\t\t{value}")
             
-            # Determine the padding based on the longest label
-            if raw_data:
-                max_label_len = max(len(item[0]) for item in raw_data) + 2
-                
-                # 2. Second pass: Create aligned lines using monospace-friendly padding
-                lines = []
-                for label, value in raw_data:
-                    # .ljust(n, '.') adds dots until it reaches length 'n'
-                    aligned_line = f"{label.ljust(max_label_len, '.')}: {value}"
-                    lines.append(aligned_line)
-                
-                resume_text = "\n".join(lines)
+            resume_text = "\n".join(raw_data)
         else:
             print(f"4. {prefix}No resume text for text message...")
+            
+        text_to_send = ""
+        # 3. Final formatting for WhatsApp
+        if title and resume_text:
+            # Since we are not using monospace anymore, a fixed-length underline works best
+            underline = "—" * 15 
+            text_to_send = f"*{title}*\n{underline}\n{resume_text}"
+        else:
+            # If no resume, just send the bold title
+            text_to_send = f"*{title or resume_text or ''}*"
 
         print(f"5. {prefix}Exporting '{view_sheet_name}' to PDF...")
         pdf_content = sheets_client.get_pdf_content(
@@ -149,18 +176,6 @@ def main(year_to_set, month_to_set, validate=True):
         base64_image = sheets_client.pix_to_base64(pix)
 
         print(f"8. {prefix}Sending to Whatsapp...")
-        
-
-
-        text_to_send = ""
-        # 3. Final formatting logic for WhatsApp
-        if title and resume_text:
-            # Use triple backticks for the whole block to ensure the alignment works
-            text_to_send = f"```{title}\n{'_' * len(title)}\n{resume_text}```"
-        else:
-            # If no resume, just send the title (or resume if title is missing)
-            # Using triple backticks here is optional but keeps font consistency
-            text_to_send = f"```{title or resume_text or ''}```"
 
         print(client.send_message_base64(destination, text_to_send, base64_image))
         time.sleep(5)
@@ -174,9 +189,13 @@ if __name__ == '__main__':
     parser.add_argument('--year', type=str, default="2026", help="Year to set for the bills (default: 2026)")
     parser.add_argument('--month', type=str, default="Marzo", help="Month to set for the bills (default: Marzo)")
     parser.add_argument('--no-validate', action='store_false', dest='validate', help="Send bills directly to responsible phones instead of validation number")
+    parser.add_argument('--ids', type=str, default="", help="Comma-separated list of id_execution to process")
+    parser.add_argument('--list', action='store_true', help="Only list available bills without processing them")
     parser.set_defaults(validate=True)
     
     args = parser.parse_args()
+    
+    execution_ids = [i.strip() for i in args.ids.split(",")] if args.ids else []
 
     # Execution examples:
     # Default execution: 
@@ -186,4 +205,4 @@ if __name__ == '__main__':
     # Send directly to responsible (skip validation): 
     #   python src/generate_bills.py --no-validate
     
-    main(args.year, args.month, args.validate)
+    main(args.year, args.month, args.validate, execution_ids, args.list)

@@ -197,40 +197,10 @@ class GoogleSheetsClient:
             return pix
         return None
 
-    def get_formatted_text_from_columns(self, sheet_name, column1_index, column2_index, spreadsheet_id=None):
-        """
-        Extracts content from two columns and returns it as a formatted string.
-        """
-        all_values = self.get_all_values_cached(sheet_name, spreadsheet_id=spreadsheet_id)
-        
-        lines = []
-        for i, row in enumerate(all_values):
-            val1 = row[column1_index - 1] if column1_index - 1 < len(row) else ""
-            val2 = row[column2_index - 1] if column2_index - 1 < len(row) else ""
-            if val1.strip() == "" and val2.strip() == "":
-                continue
-            
-            separator = "\t\t"
-            if i == 2:
-                separator = "\t\t\t"
-            
-            lines.append(f"{val1.strip()}{separator}{val2.strip()}")
-        
-        return "\n".join(lines) + "\n"
-
     def save_text_to_file(self, text, output_txt_path):
         """Saves a string to a local text file."""
         with open(output_txt_path, 'w', encoding='utf-8') as f:
             f.write(text)
-
-    def extract_columns_to_text(self, sheet_name, column1_index, column2_index, output_txt_path, spreadsheet_id=None):
-        """
-        Extracts text from two columns (1-based index) and saves it to a local text file.
-        column1_index and column2_index should be integers (e.g., 1 for A, 2 for B).
-        """
-        text = self.get_formatted_text_from_columns(sheet_name, column1_index, column2_index, spreadsheet_id=spreadsheet_id)
-        self.save_text_to_file(text, output_txt_path)
-        print(f"Success: Columns {column1_index} and {column2_index} extracted to {output_txt_path}")
 
     def update_dropdown_cell(self, sheet_name, cell_label, new_value, spreadsheet_id=None):
         """
