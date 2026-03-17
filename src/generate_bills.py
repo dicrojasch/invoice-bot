@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import json
 import sys
 import time
+import logging
 
 # Import our new modules
 from utils import check_env_permissions
@@ -10,6 +11,28 @@ from google_drive_client import GoogleDriveClient
 from gemini_client import GeminiClient
 from google_sheets_client import GoogleSheetsClient
 from send_wa_message import WhatsAppClient
+
+# Logging Configuration
+def setup_logging(level=logging.INFO):
+    # Clear any existing handlers to allow reconfiguration
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+        
+    logging.basicConfig(
+        level=level,
+        format='[%(levelname)s][%(name)s] %(message)s',
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
+
+class BillLoggerAdapter(logging.LoggerAdapter):
+    """Adapter to add bill ID context to log messages."""
+    def process(self, msg, kwargs):
+        bill_id = self.extra.get('bill_id')
+        prefix = f"[id={bill_id}] " if bill_id else ""
+        return f"{prefix}{msg}", kwargs
 
 # --- Configuration Section ---
 check_env_permissions()
@@ -35,7 +58,7 @@ SCOPES = [
 
 def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only=False):
     os.makedirs("output", exist_ok=True)
-    print(" Authenticating Google Services...")
+    logger.info("Authenticating Google Services...")
     # Authenticate Drive and Sheets using the new modules
     sheets_client = GoogleSheetsClient(SERVICE_ACCOUNT_FILE, SCOPES)
     client = WhatsAppClient()
@@ -44,9 +67,10 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
     bills = sheets_client.get_all_records_for_bill(SPREADSHEET_ID)
 
     if list_only:
-        print("\n--- Available Bills ---")
-        print(f"{'ID':<5} | {'Sheet':<20} | {'Responsible':<15} | {'Parameters'}")
-        print("-" * 80)
+        logger.info("--- Available Bills ---")
+        header = f"{'ID':<5} | {'Sheet':<20} | {'Responsible':<15} | {'Parameters'}"
+        logger.info(header)
+        logger.info("-" * len(header))
         for bill in bills:
             if execution_ids and str(bill.get('id_execution')) not in execution_ids:
                 continue
@@ -57,16 +81,18 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
             params = json.dumps(bill.get('parameters', {}))
             fixed = json.dumps(bill.get('fixed_parameters', {}))
             
-            print(f"{id_exec:<5} | {sheet:<20} | {resp:<15} | {params} (Fixed: {fixed})")
-        print("-" * 80)
+            logger.info(f"{id_exec:<5} | {sheet:<20} | {resp:<15} | {params} (Fixed: {fixed})")
+        logger.info("-" * len(header))
         return
 
     for bill in bills: 
+        bill_id = bill.get('id_execution')
+        b_logger = BillLoggerAdapter(logger, {'bill_id': bill_id})
         
-        print(f"1. Starting for bill {bill['id_execution']}...")
+        b_logger.info(f"Starting for bill {bill_id}...")
         
-        if execution_ids and str(bill.get('id_execution')) not in execution_ids:
-            print(f"1.1. Skipping bill {bill['id_execution']}...")
+        if execution_ids and str(bill_id) not in execution_ids:
+            b_logger.info(f"Skipping bill {bill_id}...")
             continue
 
         if validate:
@@ -93,24 +119,23 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
         parameters = f"{'(year=' + year_to_set if year_to_set else ''} {', month=' + month_to_set if month_to_set else ''} {', property=' + property_to_set + ")" if property_to_set else ''}"
         parameters = "with parameters " + parameters if len(parameters.strip()) > 0 else ""
         
-        print(f"\n")
-        print(f"2. Starting for '{view_sheet_name}' {parameters}...")
+        b_logger.info(f"Starting for '{view_sheet_name}' {parameters}...")
 
         # Extract key and value list from restricted_parameter (e.g., {"property": ["101", "102"]})
         restricted_params_keys = bill.get('restricted_parameter').keys()
         skip_bill = False
-        print(f"3. Checking restricted parameters for '{view_sheet_name}' {parameters}...")
+        b_logger.info(f"Checking restricted parameters for '{view_sheet_name}' {parameters}...")
         for restricted_params_key in restricted_params_keys:
             restricted_params_values = bill.get('restricted_parameter')[restricted_params_key]
             if month_to_set in restricted_params_values:
-                print(f"3.1.    Found '{month_to_set}' in restricted parameter '{restricted_params_key}'. Skipping...")
+                b_logger.info(f"Found '{month_to_set}' in restricted parameter '{restricted_params_key}'. Skipping...")
                 skip_bill = True
                 break
             
         if skip_bill:
             continue
 
-        print("4. {prefix}Extracting columns to text file...")
+        b_logger.info(f"{prefix}Extracting columns to text file...")
 
         sheets_client.update_dropdown_cell(view_sheet_name, cell_year, year_to_set)
         sheets_client.update_dropdown_cell(view_sheet_name, cell_month, month_to_set)
@@ -124,21 +149,21 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
     
         title = ""
         if bill['title']:
-            print("4. {prefix}Extracting title for text message...")
+            b_logger.info(f"{prefix}Extracting title for text message...")
             for cell in bill['title']:
                 if cell[0].startswith("'") and cell[0].endswith("'"):
                     title += cell[0].replace("'", "") + " "
                 else:
                     title += sheets_client.get_cell_value(view_sheet_name, cell[0]) + " "
         else:
-            print("4. {prefix}No title for text message...")
+            b_logger.info(f"{prefix}No title for text message...")
 
         title = title.strip().replace("\n", " ")
 
         resume_text = ""
         if bill['resume_text']:
             raw_data = []
-            print(f"4. {prefix}Extracting resume text for text message...")
+            b_logger.info(f"{prefix}Extracting resume text for text message...")
             
             # 1. First pass: Extract values and find the longest label
             for row in bill['resume_text']:
@@ -150,7 +175,7 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
             
             resume_text = "\n".join(raw_data)
         else:
-            print(f"4. {prefix}No resume text for text message...")
+            b_logger.info(f"{prefix}No resume text for text message...")
             
         text_to_send = ""
         # 3. Final formatting for WhatsApp
@@ -162,22 +187,22 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
             # If no resume, just send the bold title
             text_to_send = f"*{title or resume_text or ''}*"
 
-        print(f"5. {prefix}Exporting '{view_sheet_name}' to PDF...")
+        b_logger.info(f"{prefix}Exporting '{view_sheet_name}' to PDF...")
         pdf_content = sheets_client.get_pdf_content(
             sheet_name=view_sheet_name
         )
             
-        print(f"6. {prefix}Converting '{view_sheet_name}' PDF to Image Pixmap...")
+        b_logger.info(f"{prefix}Converting '{view_sheet_name}' PDF to Image Pixmap...")
         pix = sheets_client.convert_pdf_to_image(
             pdf_content=pdf_content,
             output_image_path=file_path + '.png'
         )
-        print(f"7. {prefix}Converting '{view_sheet_name}' Image Pixmap to Base64...")
+        b_logger.info(f"{prefix}Converting '{view_sheet_name}' Image Pixmap to Base64...")
         base64_image = sheets_client.pix_to_base64(pix)
 
-        print(f"8. {prefix}Sending to Whatsapp...")
+        b_logger.info(f"{prefix}Sending to Whatsapp...")
 
-        print(client.send_message_base64(destination, text_to_send, base64_image))
+        b_logger.info(f"{prefix}Sent to Whatsapp: {client.send_message_base64(destination, text_to_send, base64_image)}")
         time.sleep(5)
 
 
@@ -191,14 +216,19 @@ if __name__ == '__main__':
     parser.add_argument('--no-validate', action='store_false', dest='validate', help="Send bills directly to responsible phones instead of validation number")
     parser.add_argument('--ids', type=str, default="", help="Comma-separated list of id_execution to process")
     parser.add_argument('--list', action='store_true', help="Only list available bills without processing them")
+    parser.add_argument('--log', type=str, default="INFO", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], help="Logging level (default: INFO)")
     parser.set_defaults(validate=True)
     
     args = parser.parse_args()
     
+    # Reconfigure logging with the specified level
+    log_level = getattr(logging, args.log.upper(), logging.INFO)
+    logger = setup_logging(log_level)
+    
     execution_ids = [i.strip() for i in args.ids.split(",")] if args.ids else []
 
     # Execution examples:
-    # Default execution: 
+    # Default execution: +
     #   python src/generate_bills.py 
     # Custom year and month: 
     #   python src/generate_bills.py --year 2025 --month Diciembre

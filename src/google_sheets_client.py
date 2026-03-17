@@ -4,6 +4,9 @@ import requests
 import fitz  # PyMuPDF
 import base64
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GoogleSheetsClient:
     def __init__(self, service_account_file, scopes, spreadsheet_id=None):
@@ -54,7 +57,7 @@ class GoogleSheetsClient:
         
         # Append the row to the first available empty row
         worksheet.append_row(row)
-        print("Success: Data uploaded to Google Sheets!")
+        logger.debug("Success: Data uploaded to Google Sheets!")
 
     # Helper function to convert "key1=val1;key2=val2" into a dictionary
     def parse_parameter_string(self, param_string):
@@ -130,7 +133,7 @@ class GoogleSheetsClient:
         if response.status_code == 200:
             return response.content
         else:
-            print(f"Error downloading PDF: {response.status_code} - {response.text}")
+            logger.debug(f"Error downloading PDF: {response.status_code} - {response.text}")
             return None
 
     def save_pdf_to_file(self, content, output_pdf_path):
@@ -138,7 +141,7 @@ class GoogleSheetsClient:
         if content:
             with open(output_pdf_path, 'wb') as f:
                 f.write(content)
-            print(f"Success: PDF saved to {output_pdf_path}")
+            logger.debug(f"Success: PDF saved to {output_pdf_path}")
             return True
         return False
 
@@ -167,11 +170,11 @@ class GoogleSheetsClient:
                 doc.close()
                 return pix
             else:
-                print("Error: Empty PDF")
+                logger.debug("Error: Empty PDF")
                 doc.close()
                 return None
         except Exception as e:
-            print(f"Error converting PDF to image: {e}")
+            logger.debug(f"Error converting PDF to image: {e}")
             return None
 
     def pix_to_base64(self, pixmap):
@@ -186,7 +189,7 @@ class GoogleSheetsClient:
         """Saves a pixmap to a local image file."""
         if pixmap:
             pixmap.save(output_image_path)
-            print(f"Success: Image saved at {output_image_path}")
+            logger.debug(f"Success: Image saved at {output_image_path}")
             return True
         return False
 
@@ -213,7 +216,7 @@ class GoogleSheetsClient:
         if (not spreadsheet_id or spreadsheet_id == self.spreadsheet_id) and sheet_name in self._sheet_data_cache:
             del self._sheet_data_cache[sheet_name]
             
-        print(f"Success: Updated cell {cell_label} to '{new_value}'. Formatted data cache invalidated.")
+        logger.debug(f"Success: Updated cell {cell_label} to '{new_value}'. Formatted data cache invalidated.")
         return True
 
     def get_cell_value(self, sheet_name, cell_label, spreadsheet_id=None):
@@ -235,10 +238,10 @@ class GoogleSheetsClient:
                 value = ""
                 
         except Exception as e:
-            print(f"Error parsing cell label {cell_label}: {e}")
+            logger.debug(f"Error parsing cell label {cell_label}: {e}")
             value = ""
             
-        print(f"Success: Retrieved value from cell {cell_label}: '{value}'")
+        logger.debug(f"Success: Retrieved value from cell {cell_label}: '{value}'")
         return value
 
     def get_dropdown_options(self, sheet_name, cell_label, spreadsheet_id=None):
@@ -256,7 +259,7 @@ class GoogleSheetsClient:
         
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            print(f"Error fetching cell data: {response.status_code} - {response.text}")
+            logger.debug(f"Error fetching cell data: {response.status_code} - {response.text}")
             return None
             
         data = response.json()
@@ -286,18 +289,18 @@ class GoogleSheetsClient:
                             dropdown_options = [item for sublist in raw_values for item in sublist if str(item).strip()]
                             return dropdown_options
                         else:
-                            print(f"Error fetching range values: {values_response.status_code} - {values_response.text}")
+                            logger.debug(f"Error fetching range values: {values_response.status_code} - {values_response.text}")
                             return []
                     return []
                 else:
-                    print(f"Note: Unhandled validation type {condition_type} for cell {cell_label}.")
+                    logger.debug(f"Note: Unhandled validation type {condition_type} for cell {cell_label}.")
                     return []
             else:
-                 print(f"Note: No data validation found for {cell_label}.")
+                 logger.debug(f"Note: No data validation found for {cell_label}.")
                  return []
                 
         except (KeyError, IndexError):
-            print(f"Note: Cell {cell_label} data not found in response.")
+            logger.debug(f"Note: Cell {cell_label} data not found in response.")
             return []
 
     def get_all_sheet_names(self, spreadsheet_id=None):
