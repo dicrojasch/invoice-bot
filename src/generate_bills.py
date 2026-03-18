@@ -11,6 +11,7 @@ from google_drive_client import GoogleDriveClient
 from gemini_client import GeminiClient
 from google_sheets_client import GoogleSheetsClient
 from send_wa_message import WhatsAppClient
+from content_handler import ContentHandler
 
 # Logging Configuration
 def setup_logging(level=logging.INFO):
@@ -204,12 +205,11 @@ def main(year_to_set, month_to_set, validate=True, execution_ids=None, list_only
         )
             
         b_logger.info(f"{prefix}Converting '{view_sheet_name}' PDF to Image Pixmap...")
-        pix = sheets_client.convert_pdf_to_image(
-            pdf_content=pdf_content,
-            output_image_path=file_path + '.png'
+        pix = ContentHandler.convert_pdf_to_image(
+            pdf_content=pdf_content
         )
         b_logger.info(f"{prefix}Converting '{view_sheet_name}' Image Pixmap to Base64...")
-        base64_image = sheets_client.pix_to_base64(pix)
+        base64_image = ContentHandler.pix_to_base64(pix)
 
         b_logger.info(f"{prefix}Sending to Whatsapp...")
 

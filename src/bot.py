@@ -8,6 +8,7 @@ from utils import check_env_permissions
 from google_drive_client import GoogleDriveClient
 from gemini_client import GeminiClient
 from google_sheets_client import GoogleSheetsClient
+from content_handler import ContentHandler
 
 # --- Configuration Section ---
 check_env_permissions()
@@ -88,7 +89,7 @@ def main():
     print("2. Extracting columns F and N to text file...")
     # Column F is index 6, Column N is index 14
     text = sheets_client.get_formatted_text_from_columns(TARGET_SPREADSHEET_ID, TARGET_SHEET_NAME, 6, 14)
-    sheets_client.save_text_to_file(text, 'output/columnas_F_N.txt')
+    ContentHandler.save_text_to_file(text, 'output/columnas_F_N.txt')
 
     print("3. Exporting 'View Gas' to PDF...")
     pdf_content = sheets_client.get_pdf_content(
@@ -101,7 +102,7 @@ def main():
         
     print("4. Converting 'View Gas' PDF to Image...")
     image_path = "output/view_gas.png"
-    sheets_client.convert_pdf_to_image(
+    ContentHandler.convert_pdf_to_image(
         pdf_content=pdf_content,
         output_image_path=image_path
     )

@@ -1,10 +1,9 @@
 import gspread
 from google.oauth2.service_account import Credentials
 import requests
-import fitz  # PyMuPDF
-import base64
 import os
 import logging
+from content_handler import ContentHandler
 
 logger = logging.getLogger(__name__)
 
@@ -66,44 +65,6 @@ class GoogleSheetsClient:
         worksheet.append_row(row)
         logger.debug("Success: Data uploaded to Google Sheets!")
 
-    # Helper function to convert "key1=val1;key2=val2" into a dictionary
-    def parse_parameter_string(self, param_string):
-        if not param_string or '=' not in str(param_string):
-            return {}
-        
-        # Split by semicolon to get pairs, then by equals to get key/value
-        # We use strip() to handle potential whitespace
-        try:
-            return {
-                pair.split('=')[0].strip(): pair.split('=')[1].strip()
-                for pair in str(param_string).split(';')
-                if '=' in pair
-            }
-        except Exception:
-            return {}
-
-    # Helper function to convert "key1=val1,val2;key2=val3" into a dictionary with lists
-    def parse_parameter_list_string(self, param_string):
-        if not param_string or '=' not in str(param_string):
-            return {}
-        
-        try:
-            return {
-                pair.split('=')[0].strip(): [v.strip() for v in pair.split('=')[1].split(',')]
-                for pair in str(param_string).split(';')
-                if '=' in pair
-            }
-        except Exception:
-            return {}
-
-    def parse_nested_list(self, input_str):
-        if not input_str:
-            return []
-        
-        # 1. Split by semicolon to get the outer groups: ['F3,F4', 'O3,O4']
-        # 2. Split each group by comma: [['F3', 'F4'], ['O3', 'O4']]
-        return [item.split(',') for item in str(input_str).split(';')]
-
     def get_all_records_for_bill(self, spreadsheet_id=None):
         sheet_name = "bills"
         worksheet = self.get_cached_worksheet(sheet_name, spreadsheet_id=spreadsheet_id)
@@ -112,15 +73,15 @@ class GoogleSheetsClient:
         # 2. Process the records to expand columns I and J
         for row in data_records:
             # Expand 'parameters' column (Column I)
-            row['parameters'] = self.parse_parameter_string(row.get('parameters', ''))
+            row['parameters'] = ContentHandler.parse_parameter_string(row.get('parameters', ''))
             # Expand 'fixed_parameters' column (Column J)
-            row['fixed_parameters'] = self.parse_parameter_string(row.get('fixed_parameters', ''))
+            row['fixed_parameters'] = ContentHandler.parse_parameter_string(row.get('fixed_parameters', ''))
             # Expand 'title' column into nested lists (Column K)
-            row['title'] = self.parse_nested_list(row.get('title', ''))
+            row['title'] = ContentHandler.parse_nested_list(row.get('title', ''))
             # Expand 'resume_text' column into nested lists (Column L)
-            row['resume_text'] = self.parse_nested_list(row.get('resume_text', ''))
+            row['resume_text'] = ContentHandler.parse_nested_list(row.get('resume_text', ''))
             # Expand 'restricted_parameter' column into nested lists (Column M)
-            row['restricted_parameter'] = self.parse_parameter_list_string(row.get('restricted_parameter', ''))
+            row['restricted_parameter'] = ContentHandler.parse_parameter_list_string(row.get('restricted_parameter', ''))
 
         return data_records
             
@@ -143,74 +104,13 @@ class GoogleSheetsClient:
             logger.debug(f"Error downloading PDF: {response.status_code} - {response.text}")
             return None
 
-    def save_pdf_to_file(self, content, output_pdf_path):
-        """Saves PDF content to a local file."""
-        if content:
-            with open(output_pdf_path, 'wb') as f:
-                f.write(content)
-            logger.debug(f"Success: PDF saved to {output_pdf_path}")
-            return True
-        return False
-
     def export_sheet_to_pdf(self, sheet_name, output_pdf_path, spreadsheet_id=None):
         """Exports a specific tab to a PDF file and downloads it locally."""
         content = self.get_pdf_content(sheet_name, spreadsheet_id=spreadsheet_id)
         if content:
-            return self.save_pdf_to_file(content, output_pdf_path)
+            return ContentHandler.save_pdf_to_file(content, output_pdf_path)
         return False
 
-    def get_image_from_pdf_content(self, pdf_content):
-        """Converts the first page of the PDF bytes to a pixmap, cropped to visible content."""
-        try:
-            doc = fitz.open(stream=pdf_content, filetype="pdf")
-            if len(doc) > 0:
-                page = doc.load_page(0)
-                content_rect = page.get_bboxlog()
-                if content_rect:
-                    full_bbox = fitz.Rect()
-                    for item in content_rect:
-                        full_bbox.include_rect(item[1])
-                    padding = 0.5
-                    full_bbox = full_bbox + (-padding, -padding, padding, padding)
-                    page.set_cropbox(full_bbox)
-                pix = page.get_pixmap(dpi=300)
-                doc.close()
-                return pix
-            else:
-                logger.debug("Error: Empty PDF")
-                doc.close()
-                return None
-        except Exception as e:
-            logger.debug(f"Error converting PDF to image: {e}")
-            return None
-
-    def pix_to_base64(self, pixmap):
-        """Converts a fitz.Pixmap to a base64 encoded string."""
-        if pixmap:
-            img_bytes = pixmap.tobytes("png")
-            base64_string = base64.b64encode(img_bytes).decode('utf-8')
-            return base64_string
-        return None
-
-    def save_image_to_file(self, pixmap, output_image_path):
-        """Saves a pixmap to a local image file."""
-        if pixmap:
-            pixmap.save(output_image_path)
-            logger.debug(f"Success: Image saved at {output_image_path}")
-            return True
-        return False
-
-    def convert_pdf_to_image(self, pdf_content, output_image_path):
-        """Converts PDF bytes to an image and saves it locally."""
-        pix = self.get_image_from_pdf_content(pdf_content)
-        if pix:
-            return pix
-        return None
-
-    def save_text_to_file(self, text, output_txt_path):
-        """Saves a string to a local text file."""
-        with open(output_txt_path, 'w', encoding='utf-8') as f:
-            f.write(text)
 
     def update_dropdown_cell(self, sheet_name, cell_label, new_value, spreadsheet_id=None):
         """
